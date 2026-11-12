@@ -40,7 +40,6 @@ function Analysis({ rel, closureOf }) {
       <h3 className="lab-heading">Violações</h3><Violations rel={rel} analysis={analysis} />
       <h3 className="lab-heading">Cobertura mínima</h3><FdList fds={NF.groupFds(NF.minimalCover(rel.fds, rel.attrs), rel.attrs)} />
       <h3 className="lab-heading">Síntese 3FN</h3><Decomposition rel={rel} parts={NF.synthesize3NF(rel.attrs, rel.fds)} target="3FN" />
-      <h3 className="lab-heading">Decomposição FNBC</h3><Decomposition rel={rel} parts={NF.decomposeBCNF(rel.attrs, rel.fds)} target="FNBC" />
     </section>
   );
 }

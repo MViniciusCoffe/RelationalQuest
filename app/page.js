@@ -10,7 +10,7 @@ const games = [
   {
     href: '/normalizacao', index: 'JOGO 02', title: 'Normalização', glyphs: ['X⁺', '→', '3FN', 'BC'],
     text: 'Entenda dependências funcionais, chaves e formas normais, e decomponha tabelas sem perder informação.',
-    items: ['9 aulas, da anomalia à FNBC', '26 desafios: fecho, chaves, formas normais, decomposição', 'Laboratório que analisa qualquer relação'],
+    items: ['9 aulas, da anomalia à 3FN', '31 desafios, 9 deles levando uma tabela da 0FN à 3FN', 'Laboratório que analisa qualquer relação'],
   },
 ];
 

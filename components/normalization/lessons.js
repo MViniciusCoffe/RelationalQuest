@@ -1,9 +1,9 @@
-// The nine lessons of the normalization game. Examples are computed by the engine
+// The nine lessons of the normalization game (up to the 3FN). Examples are computed by the engine
 // (closures, keys, violations, decompositions) instead of being written by hand.
 import NF from '@/lib/normalization/engine';
-import { nfSchemas as S } from '@/lib/normalization/content';
+import { nfSchemas as S, nfUnnormalized as U } from '@/lib/normalization/content';
 import RelationTable from '@/components/RelationTable';
-import { FdList, Fd, KeyList, Schema, Trace, Violations, Decomposition, Spurious } from './ui';
+import { FdList, Fd, KeyList, Schema, Trace, Violations, Decomposition, Spurious, UnfSchema, UnfTable } from './ui';
 
 const rel = (spec) => NF.relation(spec);
 const Data = ({ spec, mark }) => <RelationTable title={spec.name} columns={spec.attrs} rows={spec.rows} mark={mark} />;
@@ -19,7 +19,7 @@ const Split = ({ spec, parts, names }) => (
 const Cover = ({ spec }) => { const r = rel(spec); return <div className="lesson-fds"><span className="expect-label">Cobertura mínima</span><FdList fds={NF.minimalCover(r.fds, r.attrs)} /></div>; };
 function Algorithm({ spec, target }) {
   const r = rel(spec);
-  const parts = target === 'FNBC' ? NF.decomposeBCNF(r.attrs, r.fds) : NF.synthesize3NF(r.attrs, r.fds);
+  const parts = NF.synthesize3NF(r.attrs, r.fds);
   return (
     <>
       <p className="lesson-keys"><span className="expect-label">Exemplo</span><Schema name={r.name} attrs={r.attrs} /> com {r.fds.map((fd, index) => <Fd key={index} fd={fd} />)}</p>
@@ -47,7 +47,7 @@ export const nfLessons = [
         <Split spec={S.pedido} parts={[['cliente', 'telefone'], ['produto', 'preco'], ['idPedido', 'cliente', 'produto']]} names={['Cliente', 'Produto', 'Pedido']} />
         <div className="lesson-callout">
           <b>As formas normais são uma escada.</b> Cada degrau exige o anterior e elimina um tipo de redundância:
-          <ol className="nf-ladder"><li><b>1FN</b> valores atômicos</li><li><b>2FN</b> sem dependência parcial da chave</li><li><b>3FN</b> sem dependência transitiva</li><li><b>FNBC</b> todo determinante é superchave</li></ol>
+          <ol className="nf-ladder"><li><b>0FN</b> dados como chegam, com grupos repetidos</li><li><b>1FN</b> valores atômicos</li><li><b>2FN</b> sem dependência parcial da chave</li><li><b>3FN</b> sem dependência transitiva</li></ol>
           Para subir os degraus, primeiro precisamos de uma ferramenta: a <b>dependência funcional</b>.
         </div>
       </>
@@ -122,7 +122,9 @@ export const nfLessons = [
           <RelationTable title="Telefone" columns={['matricula', 'telefone']} rows={[['101', '8499-1111'], ['101', '8498-0000'], ['102', '8497-2222'], ['103', '8496-3333'], ['103', '8495-4444'], ['103', '8494-5555']]} />
         </div>
         <p>Atomicidade depende do uso: um <code>endereco</code> em texto único é atômico se o sistema nunca filtra por cidade; se filtra, separe em <code>rua</code>, <code>cidade</code>, <code>cep</code>.</p>
-        <p>Daqui em diante, todas as relações dos desafios já estão na 1FN.</p>
+        <h3>Grupos repetitivos</h3>
+        <p>Às vezes várias colunas se repetem <em>juntas</em>: os itens de uma nota fiscal, as disciplinas de um histórico. Uma relação assim está na <b>0FN</b> (não normalizada). O grupo inteiro vai para uma tabela nova, que leva a chave da tabela original; a chave da nova tabela é essa chave mais o que identifica cada item. A aula <b>Da 0FN à 3FN</b> mostra o processo completo.</p>
+        <p>Nos desafios <b>Da 0FN à 3FN</b> você parte de uma tabela não normalizada; nos demais, as relações já estão na 1FN.</p>
       </>
     ),
   },
@@ -160,22 +162,41 @@ export const nfLessons = [
     ),
   },
   {
-    title: 'Forma normal de Boyce-Codd', subtitle: 'FNBC: todo determinante é superchave. Sem exceções.',
-    goal: 'Distinguir 3FN de FNBC e saber o preço de chegar à FNBC.', practice: 'Professor de uma disciplina só',
-    Body: () => (
-      <>
-        <p>A 3FN tem uma brecha: aceita <code>X → A</code> com X não superchave <em>se A for primo</em>. A <b>FNBC</b> fecha a brecha: para toda dependência não trivial <code>X → A</code>, <b>X é superchave</b>.</p>
-        <p>Cada aluno tem um professor por disciplina, e cada professor dá uma só disciplina:</p>
-        <Data spec={S.agenda} mark={[[0, 1], [1, 1]]} />
-        <Fds spec={S.agenda} />
-        <Keys spec={S.agenda} />
-        <p>Todos os atributos são primos, então a relação está na 3FN. Mas <code>professor → disciplina</code> tem determinante que não é superchave: o fato “Rita dá BD” se repete para cada aluno dela.</p>
-        <LessonViolations spec={S.agenda} />
-        <Split spec={S.agenda} parts={[['professor', 'disciplina'], ['aluno', 'professor']]} names={['Leciona', 'Cursa']} />
-        <div className="lesson-callout warn"><b>O preço:</b> a decomposição é sem perda, mas <code>aluno, disciplina → professor</code> não cabe em nenhuma das tabelas. O banco não consegue mais impedir que um aluno tenha dois professores de BD sem uma verificação extra. Por isso, às vezes, projetistas param na 3FN.</div>
-        <p>Isso só acontece quando há <b>chaves candidatas compostas que se sobrepõem</b> (aqui, ambas contêm <code>aluno</code>). Sem isso, 3FN e FNBC coincidem.</p>
-      </>
-    ),
+    title: 'Da 0FN à 3FN', subtitle: 'O roteiro completo: de uma ficha cheia de repetições a tabelas na 3FN.',
+    goal: 'Normalizar uma tabela não normalizada em três passos: 1FN, 2FN e 3FN.', practice: 'Telefones da equipe',
+    Body: () => {
+      const flat = NF.relation(U.curso);
+      const step1 = [['codCurso', 'nomeCurso', 'codInstrutor', 'nomeInstrutor'], ['codCurso', 'cpf', 'nomeAluno', 'dataMatricula']];
+      const step2 = [step1[0], ['cpf', 'nomeAluno'], ['codCurso', 'cpf', 'dataMatricula']];
+      const step3 = [['codCurso', 'nomeCurso', 'codInstrutor'], ['codInstrutor', 'nomeInstrutor'], step2[1], step2[2]];
+      const Why = ({ part }) => <Violations rel={flat} analysis={NF.analyze(part, flat.fds)} />;
+      return (
+        <>
+          <p>Exercícios de normalização costumam começar com uma tabela “como veio do papel”: uma ficha de inscrição, uma nota, uma planilha. Cada curso abaixo guarda a <b>lista</b> dos seus alunos. Isso é a <b>0FN</b>:</p>
+          <p className="lesson-keys"><span className="expect-label">Esquema</span><UnfSchema unf={U.curso} /></p>
+          <UnfTable unf={U.curso} />
+          <Fds spec={flat} />
+          <h3>Passo 1 · 1FN: tire o grupo repetitivo</h3>
+          <p>O grupo <code>alunos</code> vai para uma tabela própria, <b>levando a chave do curso</b>. A chave da nova tabela é <code>{'{codCurso, cpf}'}</code>: o curso mais o que identifica cada aluno dentro dele.</p>
+          <Split spec={flat} parts={step1} names={['Curso', 'Matricula']} />
+          <div className="lesson-callout">Também valeria <b>achatar</b> tudo em uma tabela só, repetindo os dados do curso em cada linha (chave <code>{'{codCurso, cpf}'}</code>). Está na 1FN, mas é exatamente a redundância que os próximos passos eliminam.</div>
+          <h3>Passo 2 · 2FN: tire as dependências parciais</h3>
+          <p>Só tabelas com chave <b>composta</b> podem ter dependência parcial. Em Matricula, <code>nomeAluno</code> depende só de <code>cpf</code>, um pedaço da chave:</p>
+          <Why part={step1[1]} />
+          <p>O pedaço da chave e o que ele determina viram uma tabela; em Matricula fica só o que depende da chave inteira. Curso tem chave simples e já está na 2FN.</p>
+          <Split spec={flat} parts={step2} names={['Curso', 'Aluno', 'Matricula']} />
+          <h3>Passo 3 · 3FN: tire as dependências transitivas</h3>
+          <p>Em Curso, <code>nomeInstrutor</code> chega à chave por meio de <code>codInstrutor</code>, que não é chave:</p>
+          <Why part={step2[0]} />
+          <Split spec={flat} parts={step3} names={['Curso', 'Instrutor', 'Aluno', 'Matricula']} />
+          <div className="lesson-callout">
+            <b>Roteiro para qualquer exercício:</b>
+            <ol className="lesson-steps"><li><b>1FN:</b> cada grupo repetitivo vira uma tabela com a chave da original.</li><li><b>2FN:</b> em cada chave composta, separe o que depende de só uma parte dela.</li><li><b>3FN:</b> separe o que depende de um atributo que não é chave.</li></ol>
+            Em todo passo, o determinante fica nas duas tabelas (vira chave estrangeira), a junção volta exata e cada dependência continua cabendo em alguma tabela.
+          </div>
+        </>
+      );
+    },
   },
   {
     title: 'Decomposições boas', subtitle: 'Separar tabelas sem perder informação nem regras.',
@@ -195,13 +216,13 @@ export const nfLessons = [
         <p>Para testar <code>X → Y</code>: comece com X; para cada parte Rᵢ, acrescente <code>(resultado ∩ Rᵢ)⁺ ∩ Rᵢ</code>; repita. A dependência é preservada se Y aparecer no resultado.</p>
         <div className="lesson-cards">
           <Card title="Síntese para 3FN">Sempre sem perda <em>e</em> preserva dependências.</Card>
-          <Card title="Decomposição para FNBC">Sempre sem perda, mas pode perder dependências (como em Agenda).</Card>
+          <Card title="Separar pelo determinante">O passo da 2FN e da 3FN: com <code>X → A</code>, troque R por <code>(X, A)</code> e <code>R − A</code>. É sem perda porque X é chave da primeira parte.</Card>
         </div>
       </>
     ),
   },
   {
-    title: 'Algoritmos de normalização', subtitle: 'Cobertura mínima, síntese 3FN e decomposição FNBC, passo a passo.',
+    title: 'Algoritmos de normalização', subtitle: 'Cobertura mínima e síntese 3FN, passo a passo.',
     goal: 'Aplicar os algoritmos que normalizam qualquer relação.', practice: 'Cobertura enxuta',
     Body: () => (
       <>
@@ -213,22 +234,19 @@ export const nfLessons = [
         <h3>Síntese para 3FN</h3>
         <ol className="lesson-steps"><li>Calcule uma cobertura mínima.</li><li>Para cada lado esquerdo X, crie uma tabela com X e tudo que ele determina na cobertura.</li><li>Se nenhuma tabela contém uma chave candidata, crie uma com uma chave.</li><li>Remova tabelas contidas em outras.</li></ol>
         <Algorithm spec={S.produto} target="3FN" />
-        <h3>Decomposição para FNBC</h3>
-        <ol className="lesson-steps"><li>Ache uma dependência <code>X → A</code> que viole a FNBC em alguma tabela R.</li><li>Troque R por <code>X⁺ ∩ R</code> e <code>R − (X⁺ − X)</code>.</li><li>Repita até todas as tabelas estarem na FNBC.</li></ol>
-        <Algorithm spec={S.cep} target="FNBC" />
         <h3>Cola das formas normais</h3>
         <div className="table-scroll">
           <table className="relation-table cheat">
             <thead><tr><th>Forma</th><th>Exige</th><th>Viola quando</th><th>Correção</th></tr></thead>
             <tbody>
+              <tr><td>0FN → 1FN</td><td>Sem grupos repetidos</td><td>Um registro guarda vários itens</td><td>Tabela do grupo, com a chave da original</td></tr>
               <tr><td>1FN</td><td>Valores atômicos</td><td>Lista ou grupo repetido numa célula</td><td>Tabela com uma linha por valor</td></tr>
               <tr><td>2FN</td><td>1FN, sem dependência parcial</td><td>Parte de uma chave → atributo não primo</td><td>Tabela para o pedaço da chave</td></tr>
               <tr><td>3FN</td><td>X superchave ou A primo</td><td>Não chave → atributo não primo</td><td>Tabela para o determinante</td></tr>
-              <tr><td>FNBC</td><td>X sempre superchave</td><td>Não chave → atributo primo</td><td>Separar pelo determinante (pode perder DF)</td></tr>
             </tbody>
           </table>
         </div>
-        <p>Além da FNBC existem a <b>4FN</b> (dependências multivaloradas, como “um professor tem vários idiomas e vários cursos, independentes”) e a <b>5FN</b> (dependências de junção). Elas são raras na prática e ficam fora deste jogo.</p>
+        <p>Existem formas normais acima da 3FN (FNBC, 4FN e 5FN), mas elas ficam fora deste jogo.</p>
       </>
     ),
   },

@@ -7,7 +7,7 @@ import { AttrSet, Fd, FdList, KeyList, Schema, kindLabel } from './ui';
 import { judge, Explanation } from './judge';
 import { plural } from '@/lib/format';
 
-const NF_HINT = { '1FN': 'tem dependência parcial', '2FN': 'tem dependência transitiva', '3FN': 'só viola a FNBC', FNBC: 'todo determinante é superchave' };
+const NF_HINT = { '1FN': 'tem dependência parcial', '2FN': 'tem dependência transitiva', '3FN': 'sem parciais nem transitivas' };
 
 function AttrPicker({ attrs, pressed, locked = [], onToggle }) {
   return (

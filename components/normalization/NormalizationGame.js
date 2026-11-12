@@ -9,16 +9,17 @@ import NF from '@/lib/normalization/engine';
 import { nfLevels } from '@/lib/normalization/content';
 import { nfLessons } from './lessons';
 import Challenge from './Challenge';
+import Pipeline, { STAGES } from './Pipeline';
 import Lab from './Lab';
 import { pad, plural } from '@/lib/format';
 import useSavedGame, { clearSavedGame, indexIn, indexSet, stringMap } from '@/components/useSavedGame';
 
-const SAVE_KEY = 'rq-normalization-v1';
+const SAVE_KEY = 'rq-normalization-v2'; // v2: FNBC removed and 0FN→3FN challenges added (indexes changed)
 const DEFAULT_SECTIONS = ['Aula'];
 const sectionXp = { 'Fácil': 100, 'Médio': 150, 'Difícil': 200, Insano: 300 };
 const difficultyClass = { 'Fácil': 'easy', 'Médio': 'medium', 'Difícil': 'hard', Insano: 'insane' };
 const challengeSections = ['Fácil', 'Médio', 'Difícil', 'Insano'];
-const typeLabel = { choice: 'Anomalias', atomic: 'Primeira forma normal', closure: 'Fecho de atributos', keys: 'Chaves candidatas', classify: 'Classificar dependências', nf: 'Forma normal', decompose: 'Decomposição', cover: 'Cobertura mínima' };
+const typeLabel = { choice: 'Anomalias', atomic: 'Primeira forma normal', closure: 'Fecho de atributos', keys: 'Chaves candidatas', classify: 'Classificar dependências', nf: 'Forma normal', decompose: 'Decomposição', cover: 'Cobertura mínima', pipeline: 'Da 0FN à 3FN' };
 const sectionLevels = (section) => nfLevels.map((level, index) => ({ level, index })).filter(({ level }) => level.section === section);
 const positionInSection = (index) => sectionLevels(nfLevels[index].section).findIndex((item) => item.index === index) + 1;
 
@@ -28,6 +29,7 @@ export default function NormalizationGame() {
   const [completed, setCompleted] = useState(() => new Set());
   const [solutionSeen, setSolutionSeen] = useState(() => new Set());
   const [drafts, setDrafts] = useState({});
+  const [stages, setStages] = useState({}); // pipeline challenges: { index: stages passed }
   const [openSections, setOpenSections] = useState(() => new Set(DEFAULT_SECTIONS));
   const firstRender = useRef(true);
   const skipScroll = useRef(false); // restoring the saved screen must not scroll the page
@@ -35,12 +37,15 @@ export default function NormalizationGame() {
   // Progress and typed answers survive reloads.
   const ready = useSavedGame(
     SAVE_KEY,
-    { view, drafts, xp, completed: [...completed], solutionSeen: [...solutionSeen], openSections: [...openSections] },
+    { view, drafts, stages, xp, completed: [...completed], solutionSeen: [...solutionSeen], openSections: [...openSections] },
     (saved) => {
       const { view: savedView } = saved;
       const validView = savedView && ((savedView.kind === 'lesson' && indexIn(savedView.index, nfLessons.length)) || (savedView.kind === 'level' && indexIn(savedView.index, nfLevels.length)) || (savedView.kind === 'lab' && savedView.index === 0));
       if (validView) { skipScroll.current = true; setView({ kind: savedView.kind, index: savedView.index }); }
       setDrafts(stringMap(saved.drafts));
+      if (saved.stages && typeof saved.stages === 'object') {
+        setStages(Object.fromEntries(Object.entries(saved.stages).filter(([index, count]) => nfLevels[index]?.type === 'pipeline' && Number.isInteger(count) && count >= 0 && count <= STAGES.length)));
+      }
       if (Number.isFinite(saved.xp) && saved.xp >= 0) setXp(saved.xp);
       setCompleted(indexSet(saved.completed, nfLevels.length));
       setSolutionSeen(indexSet(saved.solutionSeen, nfLevels.length));
@@ -53,6 +58,7 @@ export default function NormalizationGame() {
     clearSavedGame(SAVE_KEY);
     setView({ kind: 'lesson', index: 0 });
     setDrafts({});
+    setStages({});
     setXp(0);
     setCompleted(new Set());
     setSolutionSeen(new Set());
@@ -119,7 +125,7 @@ export default function NormalizationGame() {
     const level = nfLevels[view.index];
     const rel = NF.relation(level.rel);
     const position = pad(positionInSection(view.index));
-    header = { kicker: `${level.section.toUpperCase()} · ${position} / ${pad(sectionLevels(level.section).length)}`, mode: typeLabel[level.type].toUpperCase(), title: level.title, subtitle: `Relação ${rel.name} · ${plural(rel.attrs.length, 'atributo', 'atributos')}` };
+    header = { kicker: `${level.section.toUpperCase()} · ${position} / ${pad(sectionLevels(level.section).length)}`, mode: typeLabel[level.type].toUpperCase(), title: level.title, subtitle: level.type === 'pipeline' ? `Relação ${rel.name} · grupo repetitivo ${rel.group.name} · 3 etapas` : `Relação ${rel.name} · ${plural(rel.attrs.length, 'atributo', 'atributos')}` };
     mission = {
       label: `OBJETIVO · ${level.section.toUpperCase()} ${position} · +${sectionXp[level.section]} XP`,
       objective: level.objective,
@@ -127,10 +133,32 @@ export default function NormalizationGame() {
         <>
           <span className="expect-label">Tarefa</span><span className="chip chip-op">{typeLabel[level.type]}</span>
           {level.target && <><span className="expect-label">Meta</span><span className="chip chip-use">{level.target}</span>{level.preserve && <span className="chip chip-use">preservar dependências</span>}<span className="chip chip-use">sem perda</span></>}
+          {level.type === 'pipeline' && <><span className="expect-label">Etapas</span><span className="chip chip-use">0FN → 1FN → 2FN → 3FN</span><span className="chip chip-use">sem perda</span><span className="chip chip-use">preservar dependências a partir da 2FN</span></>}
         </>
       ),
     };
-    content = (
+    const earn = () => {
+      const earned = !completed.has(view.index) && !solutionSeen.has(view.index) ? sectionXp[level.section] : 0;
+      if (earned) setXp((value) => value + earned);
+      setCompleted((current) => new Set(current).add(view.index));
+      return earned;
+    };
+    content = level.type === 'pipeline' ? (
+      <Pipeline
+        key={view.index}
+        level={level}
+        isLast={view.index === nfLevels.length - 1}
+        done={stages[view.index] ?? 0}
+        getDraft={(stage) => drafts[`${view.index}:${STAGES[stage]}`] ?? ''}
+        setDraft={(stage, text) => setDrafts((current) => ({ ...current, [`${view.index}:${STAGES[stage]}`]: text }))}
+        onStagePassed={(stage) => {
+          setStages((current) => ({ ...current, [view.index]: Math.max(current[view.index] ?? 0, stage + 1) }));
+          return stage === STAGES.length - 1 ? earn() : 0;
+        }}
+        onSolutionSeen={() => setSolutionSeen((current) => new Set(current).add(view.index))}
+        onNext={() => go({ kind: 'level', index: view.index + 1 })}
+      />
+    ) : (
       <Challenge
         key={view.index}
         level={level}
@@ -138,12 +166,7 @@ export default function NormalizationGame() {
         isLast={view.index === nfLevels.length - 1}
         draft={drafts[view.index] ?? ''}
         setDraft={(text) => setDrafts((current) => ({ ...current, [view.index]: text }))}
-        onCorrect={() => {
-          const earned = !completed.has(view.index) && !solutionSeen.has(view.index) ? sectionXp[level.section] : 0;
-          if (earned) setXp((value) => value + earned);
-          setCompleted((current) => new Set(current).add(view.index));
-          return earned;
-        }}
+        onCorrect={earn}
         onSolutionSeen={() => setSolutionSeen((current) => new Set(current).add(view.index))}
         onNext={() => go({ kind: 'level', index: view.index + 1 })}
       />

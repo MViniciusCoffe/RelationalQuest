@@ -14,6 +14,9 @@ function parseDecomposition(text, rel) {
   for (const [index, line] of lines.entries()) {
     const match = line.match(/^([A-Za-zÀ-ÿ_][\wÀ-ÿ]*)?\s*[({]([^)}]*)[)}]\s*$/) ?? [null, null, line];
     const { attrs, unknown } = NF.resolve(NF.splitAttrs(match[2]), rel.attrs);
+    if (rel.group && unknown.some((name) => NF.fold(name) === NF.fold(rel.group.name))) {
+      return { error: <>Na linha {index + 1}, <code>{rel.group.name}</code> é o grupo repetitivo, não um atributo. Na 1FN ele deixa de existir: use os atributos dele, <CodeList items={rel.group.attrs} />.</> };
+    }
     if (unknown.length) return { error: <>Na linha {index + 1}, <CodeList items={unknown} /> não é atributo de {rel.name}. Use: <CodeList items={rel.attrs} separator=" " />.</> };
     if (!attrs.length) return { error: `A linha ${index + 1} não tem atributos.` };
     names.push(match[1] ?? partName(index));
@@ -22,7 +25,8 @@ function parseDecomposition(text, rel) {
   return { names, parts };
 }
 
-function judgeDecomposition(level, rel, text) {
+// level = { target: '1FN' | '2FN' | '3FN', preserve: boolean } (a level or a pipeline stage)
+export function judgeDecomposition(level, rel, text) {
   if (!text.trim()) return { empty: 'Escreva as relações da decomposição.' };
   const parsed = parseDecomposition(text, rel);
   if (parsed.error) return { correct: false, reason: parsed.error };
@@ -36,15 +40,19 @@ function judgeDecomposition(level, rel, text) {
     return {
       correct: false,
       analysis: <>{analysis}{rel.rows && <Spurious rel={rel} parts={parts} />}</>,
-      reason: 'A junção das partes gera tuplas falsas (com perda). Os atributos em comum precisam ser chave de alguma parte; às vezes falta uma relação com uma chave candidata.',
+      reason: rel.group
+        ? <>A junção das partes gera tuplas falsas (com perda). A tabela do grupo <code>{rel.group.name}</code> precisa levar a chave de {rel.name} (<KeyList keys={NF.candidateKeys(rel.outer, rel.fds)} />), e os atributos em comum precisam ser chave de alguma parte.</>
+        : 'A junção das partes gera tuplas falsas (com perda). Os atributos em comum precisam ser chave de alguma parte; às vezes falta uma relação com uma chave candidata.',
     };
   }
   const lost = NF.lostDependencies(parts, rel.fds);
   if (level.preserve && lost.length) return { correct: false, analysis, reason: <>Sem perda e na {level.target}, mas perde <FdInline fds={lost} />. Mantenha cada dependência inteira dentro de alguma relação.</> };
   const redundant = parts.findIndex((part, index) => parts.some((other, j) => j !== index && NF.subset(part, other)));
+  const lowest = parts.map((part) => NF.analyze(part, rel.fds).nf).reduce((low, nf) => (NF.NF_ORDER.indexOf(nf) < NF.NF_ORDER.indexOf(low) ? nf : low));
   const note = redundant >= 0
     ? <>Dica: <b>{names[redundant]}</b> está contida em outra relação e poderia ser removida.</>
-    : lost.length ? <>Como esperado na FNBC, <FdInline fds={lost} /> não é mais verificável dentro de uma tabela só.</> : null;
+    : lowest !== level.target ? <>Suas relações já estão na <b>{lowest}</b>, acima da meta ({level.target}).</>
+    : lost.length ? <>Nesta etapa tudo bem, mas <FdInline fds={lost} /> não cabe mais em uma tabela só. A partir da 2FN, as dependências precisam ser preservadas.</> : null;
   return { correct: true, analysis, note };
 }
 
@@ -112,7 +120,7 @@ export function judge(level, rel, answer) {
       if (answer.nf === analysis.nf) return { correct: true };
       const chosen = NF.NF_ORDER.indexOf(answer.nf);
       if (chosen > NF.NF_ORDER.indexOf(analysis.nf)) {
-        const breaking = { '2FN': 'parcial', '3FN': 'transitiva', FNBC: 'fnbc' };
+        const breaking = { '2FN': 'parcial', '3FN': 'transitiva' };
         const kinds = NF.NF_ORDER.slice(1, chosen + 1).map((nf) => breaking[nf]);
         const culprit = analysis.violations.find((fd) => kinds.includes(fd.kind));
         return { correct: false, reason: <>Não chega à {answer.nf}: <Fd fd={culprit} /> é {kindLabel[culprit.kind].toLowerCase()} ({kindHelp[culprit.kind]}).</> };
@@ -127,7 +135,7 @@ export function judge(level, rel, answer) {
 
 // Shown after a correct answer, or when the player asks for the solution.
 export function solutionText(level, rel) {
-  if (level.type === 'decompose') return partsText(level.target === 'FNBC' ? NF.decomposeBCNF(rel.attrs, rel.fds) : NF.synthesize3NF(rel.attrs, rel.fds));
+  if (level.type === 'decompose') return partsText(NF.synthesize3NF(rel.attrs, rel.fds));
   if (level.type === 'cover') return NF.minimalCover(rel.fds, rel.attrs).map((fd) => `${fd.lhs.join(', ')} -> ${fd.rhs[0]}`).join('\n');
   return null;
 }
@@ -174,7 +182,7 @@ export function Explanation({ level, rel, onLoad }) {
       const text = solutionText(level, rel);
       const intro = level.type === 'cover'
         ? 'Uma cobertura mínima (pode haver outras):'
-        : `Uma decomposição possível (${level.target === 'FNBC' ? 'algoritmo de decomposição FNBC' : 'algoritmo de síntese 3FN'}):`;
+        : 'Uma decomposição possível (algoritmo de síntese 3FN):';
       return (
         <>
           <p>{intro}</p>

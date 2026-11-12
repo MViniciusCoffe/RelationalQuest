@@ -1,14 +1,13 @@
 import NF from '@/lib/normalization/engine';
 import RelationTable from '@/components/RelationTable';
 
-export const kindLabel = { ok: 'OK', parcial: 'Parcial', transitiva: 'Transitiva', fnbc: 'Viola só FNBC' };
+export const kindLabel = { ok: 'OK', parcial: 'Parcial', transitiva: 'Transitiva' };
 export const kindHelp = {
-  ok: 'o determinante é superchave',
+  ok: 'o determinante é superchave (ou o atributo da direita faz parte de uma chave)',
   parcial: 'parte de uma chave determina um atributo não primo (viola a 2FN)',
   transitiva: 'um determinante que não é superchave determina um atributo não primo (viola a 3FN)',
-  fnbc: 'o determinante não é superchave, mas o atributo é primo: está na 3FN, viola só a FNBC',
 };
-export const nfHelp = { '1FN': 'há dependência parcial', '2FN': 'há dependência transitiva', '3FN': 'algum determinante não é superchave', FNBC: 'todo determinante é superchave' };
+export const nfHelp = { '1FN': 'há dependência parcial', '2FN': 'há dependência transitiva', '3FN': 'sem dependências parciais nem transitivas' };
 
 export const partName = (index) => `R${index + 1}`;
 export const partsText = (parts, names) => parts.map((part, index) => `${names?.[index] ?? partName(index)}(${part.join(', ')})`).join('\n');
@@ -38,6 +37,39 @@ export function Schema({ name, attrs, keyAttrs = [] }) {
       {attrs.map((attr, index) => <span key={attr}>{index > 0 && ', '}{keyAttrs.includes(attr) ? <u>{attr}</u> : attr}</span>)}
       )
     </code>
+  );
+}
+
+// Schema of an unnormalized relation: Nome(a, b, grupo(c, d)).
+export function UnfSchema({ unf }) {
+  return <code className="schema">{unf.name}({unf.attrs.join(', ')}, <span className="unf-group-name">{unf.group.name}({unf.group.attrs.join(', ')})</span>)</code>;
+}
+
+// 0FN table: the single-valued cells span all the rows of their repeating group.
+export function UnfTable({ unf }) {
+  const width = unf.attrs.length;
+  return (
+    <div className="table-card">
+      <div className="table-label"><span>{unf.name} · 0FN</span><small>{unf.rows.length} registros</small></div>
+      <div className="table-scroll">
+        <table className="relation-table unf-table">
+          <thead>
+            <tr>{unf.attrs.map((attr) => <th key={attr} rowSpan={2}>{attr}</th>)}<th className="unf-head" colSpan={unf.group.attrs.length}>{unf.group.name} <small>(repete)</small></th></tr>
+            <tr>{unf.group.attrs.map((attr) => <th key={attr} className="unf-sub">{attr}</th>)}</tr>
+          </thead>
+          {unf.rows.map((row, r) => (
+            <tbody key={r}>
+              {row[width].map((item, i) => (
+                <tr key={i}>
+                  {i === 0 && row.slice(0, width).map((cell, c) => <td key={c} rowSpan={row[width].length}>{cell}</td>)}
+                  {item.map((cell, c) => <td key={c} className="unf-cell">{cell}</td>)}
+                </tr>
+              ))}
+            </tbody>
+          ))}
+        </table>
+      </div>
+    </div>
   );
 }
 
@@ -97,7 +129,7 @@ export function Decomposition({ rel, parts, names, target }) {
       </div>
       <div className="checks">
         <span className={`tag ${lossless ? 'ok' : 'parcial'}`}>{lossless ? '✓ junção sem perda' : '✕ junção com perda'}</span>
-        <span className={`tag ${lost.length ? 'fnbc' : 'ok'}`}>{lost.length ? `✕ perde ${lost.map(NF.fdText).join('; ')}` : '✓ preserva as dependências'}</span>
+        <span className={`tag ${lost.length ? 'warn' : 'ok'}`}>{lost.length ? `✕ perde ${lost.map(NF.fdText).join('; ')}` : '✓ preserva as dependências'}</span>
       </div>
     </>
   );
