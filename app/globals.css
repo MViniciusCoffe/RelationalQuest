@@ -174,8 +174,11 @@ body.sheet-lock { overflow: hidden; }
 .mission-banner.unpinned { position: relative; }
 
 /* Query editor docked to the bottom of the screen while the tables are being read */
-.dock-sentinel { height: 0; }
-.query-dock { position: sticky; bottom: env(safe-area-inset-bottom, 0px); z-index: 12; transition: box-shadow .2s ease, padding .2s ease; }
+.dock-slot { position: relative; margin-top: 18px; }
+.dock-slot > .query-panel { margin-top: 0; }
+.dock-slot.holding { display: grid; place-items: center; border: 1px dashed var(--line-strong); }
+.dock-slot-note { color: var(--faint); font: 11px var(--font-mono); letter-spacing: .06em; text-transform: uppercase; }
+.query-dock.docked { position: fixed; z-index: 12; bottom: env(safe-area-inset-bottom, 0px); margin: 0; animation: dock-in .18s ease both; }
 .dock-objective { display: none; }
 .query-dock.docked { padding: 12px 16px; border-top: 3px solid var(--accent); box-shadow: 0 -14px 34px -12px rgba(0, 0, 0, .35); }
 .query-dock.docked .query-heading, .query-dock.docked .latex-preview, .query-dock.docked .input-help, .query-dock.docked .symbol-toolbar-label { display: none; }
@@ -509,6 +512,7 @@ body.sheet-lock { overflow: hidden; }
 .nf-big { color: var(--accent); font: 500 34px var(--font-mono); }
 .lab-heading { margin: 26px 0 0; font-size: 15px; }
 
+@keyframes dock-in { from { transform: translateY(16px); opacity: .6; } to { transform: none; opacity: 1; } }
 @keyframes sheet-in { from { opacity: 0; transform: translateY(14px); } to { opacity: 1; transform: none; } }
 @keyframes rise { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
 

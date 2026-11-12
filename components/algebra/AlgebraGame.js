@@ -9,6 +9,7 @@ import RelationTable from '@/components/RelationTable';
 import QueryEditor from './QueryEditor';
 import LatexPreview, { MathBlock } from './Latex';
 import ExecutionPanel from './ExecutionPanel';
+import useDock from './useDock';
 import Rules from './Rules';
 import RelationalEngine from '@/lib/algebra/engine';
 import {
@@ -44,20 +45,9 @@ export default function AlgebraGame() {
   const [openSections, setOpenSections] = useState(() => new Set(['Tutorial']));
   const [hintShown, setHintShown] = useState(false);
   const firstRender = useRef(true);
-  const dockSentinel = useRef(null);
   const executionRef = useRef(null);
-  const [docked, setDocked] = useState(false);
   const [runCount, setRunCount] = useState(0);
-
-  // The editor docks to the bottom of the screen while its normal place is below the fold,
-  // so the tables can be scrolled while typing. The sentinel sits just above the editor and
-  // does not move when the editor changes size, so docking never flickers.
-  useEffect(() => {
-    if (typeof IntersectionObserver === 'undefined' || !dockSentinel.current) return undefined;
-    const observer = new IntersectionObserver(([entry]) => setDocked(!entry.isIntersecting && entry.boundingClientRect.top > 0), { rootMargin: '0px 0px -160px 0px' });
-    observer.observe(dockSentinel.current);
-    return () => observer.disconnect();
-  }, []);
+  const dock = useDock();
 
   // After running a query, bring the result into view. Scrolling un-docks the editor, which
   // grows back and pushes the result down, so the scroll is corrected once it ends.
@@ -283,7 +273,7 @@ export default function AlgebraGame() {
       <section className="game-layout" aria-live="polite">
         <LevelRail heading="Trilha de relações" footer="Aprenda por tentativa." sections={railSections} openSections={openSections} onToggleSection={toggleSection} onSelect={(item) => go({ kind: item.kind, index: item.index })} />
 
-        <section className={`play-area${tables.length > 2 ? ' wide' : ''}`}>
+        <section className={`play-area${tables.length > 2 ? ' wide' : ''}`} style={dock.pageStyle}>
           <GameHeader {...header} xp={playground ? undefined : xp} />
           <MissionBanner {...mission} pinned={false} />
 
@@ -299,13 +289,15 @@ export default function AlgebraGame() {
             </section>
           </div>
 
-          <div className="dock-sentinel" ref={dockSentinel} aria-hidden="true" />
-          <section className={`query-panel panel query-dock${docked ? ' docked' : ''}`} aria-label="Monte sua consulta">
+          <div className={`dock-slot${dock.docked ? ' holding' : ''}`} ref={dock.slotRef} style={dock.slotStyle}>
+          {dock.docked && <span className="dock-slot-note" aria-hidden="true">Editor fixado na parte de baixo da tela ↓</span>}
+          <section className={`query-panel panel query-dock${dock.docked ? ' docked' : ''}`} ref={dock.panelRef} style={dock.panelStyle} aria-label="Monte sua consulta">
             <div className="query-heading"><div><span className="panel-index">03</span><h2>Monte sua consulta</h2></div><span className="live-pill"><span /> execução ao vivo</span></div>
             <p className="dock-objective" title={mission.objective}><span aria-hidden="true">🎯</span>{mission.objective}</p>
             <QueryEditor key={viewKey(view)} value={query} onChange={setQuery} onSubmit={submit} tables={tables} placeholder={placeholder} attemptsLabel={attemptsLabel} />
             <LatexPreview query={query} />
           </section>
+          </div>
 
           <Rules />
 
