@@ -10,6 +10,7 @@ import QueryEditor from './QueryEditor';
 import LatexPreview, { MathBlock } from './Latex';
 import ExecutionPanel from './ExecutionPanel';
 import useDock from './useDock';
+import useSavedGame, { clearSavedGame, indexIn, indexSet, stringMap } from '@/components/useSavedGame';
 import Rules from './Rules';
 import RelationalEngine from '@/lib/algebra/engine';
 import {
@@ -19,6 +20,8 @@ import {
 import { pad, plural } from '@/lib/format';
 
 const viewKey = (view) => `${view.kind}:${view.index}`;
+const SAVE_KEY = 'rq-algebra-v1';
+const DEFAULT_SECTIONS = ['Tutorial'];
 const baseName = (column) => column.split('.').pop();
 
 const Chips = ({ items, kind }) => items.map((item) => <span key={item} className={`chip ${kind}`}>{item}</span>);
@@ -42,9 +45,40 @@ export default function AlgebraGame() {
   const [xp, setXp] = useState(0);
   const [completed, setCompleted] = useState(() => new Set());
   const [solutionSeen, setSolutionSeen] = useState(() => new Set());
-  const [openSections, setOpenSections] = useState(() => new Set(['Tutorial']));
+  const [openSections, setOpenSections] = useState(() => new Set(DEFAULT_SECTIONS));
   const [hintShown, setHintShown] = useState(false);
   const firstRender = useRef(true);
+  const skipScroll = useRef(false); // restoring a saved exercise must not scroll the page
+
+  // Progress and typed queries survive reloads.
+  const ready = useSavedGame(
+    SAVE_KEY,
+    { view, drafts, xp, completed: [...completed], solutionSeen: [...solutionSeen], openSections: [...openSections] },
+    (saved) => {
+      const { view: savedView } = saved;
+      const validView = savedView && ((savedView.kind === 'level' && indexIn(savedView.index, levels.length)) || (savedView.kind === 'db' && indexIn(savedView.index, databases.length)));
+      if (validView) { skipScroll.current = true; setView({ kind: savedView.kind, index: savedView.index }); }
+      setDrafts(stringMap(saved.drafts));
+      if (Number.isFinite(saved.xp) && saved.xp >= 0) setXp(saved.xp);
+      setCompleted(indexSet(saved.completed, levels.length));
+      setSolutionSeen(indexSet(saved.solutionSeen, levels.length));
+      if (Array.isArray(saved.openSections)) setOpenSections(new Set(saved.openSections.filter((title) => typeof title === 'string')));
+    },
+  );
+
+  const resetProgress = () => {
+    if (!window.confirm('Apagar todo o progresso da Álgebra Relacional (XP, fases concluídas e consultas digitadas)?')) return;
+    clearSavedGame(SAVE_KEY);
+    setView({ kind: 'level', index: 0 });
+    setDrafts({});
+    setXp(0);
+    setCompleted(new Set());
+    setSolutionSeen(new Set());
+    setOpenSections(new Set(DEFAULT_SECTIONS));
+    setAttempts(0);
+    setRun(null);
+    setHintShown(false);
+  };
   const executionRef = useRef(null);
   const [runCount, setRunCount] = useState(0);
   const dock = useDock();
@@ -83,6 +117,7 @@ export default function AlgebraGame() {
 
   useEffect(() => {
     if (firstRender.current) { firstRender.current = false; return; }
+    if (skipScroll.current) { skipScroll.current = false; return; }
     document.getElementById('level-title')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
   }, [view]);
 
@@ -270,8 +305,8 @@ export default function AlgebraGame() {
   return (
     <main className="app-shell">
       <Topbar back mark="RQ" title="Álgebra Relacional" progress={playground ? 'playground' : `${completed.size} / ${levels.length} concluídas`} />
-      <section className="game-layout" aria-live="polite">
-        <LevelRail heading="Trilha de relações" footer="Aprenda por tentativa." sections={railSections} openSections={openSections} onToggleSection={toggleSection} onSelect={(item) => go({ kind: item.kind, index: item.index })} />
+      <section className="game-layout" aria-live="polite" style={ready ? undefined : { visibility: 'hidden' }}>
+        <LevelRail heading="Trilha de relações" footer="Aprenda por tentativa." onReset={resetProgress} sections={railSections} openSections={openSections} onToggleSection={toggleSection} onSelect={(item) => go({ kind: item.kind, index: item.index })} />
 
         <section className={`play-area${tables.length > 2 ? ' wide' : ''}`} style={dock.pageStyle}>
           <GameHeader {...header} xp={playground ? undefined : xp} />

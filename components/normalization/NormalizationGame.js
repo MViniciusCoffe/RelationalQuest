@@ -11,7 +11,10 @@ import { nfLessons } from './lessons';
 import Challenge from './Challenge';
 import Lab from './Lab';
 import { pad, plural } from '@/lib/format';
+import useSavedGame, { clearSavedGame, indexIn, indexSet, stringMap } from '@/components/useSavedGame';
 
+const SAVE_KEY = 'rq-normalization-v1';
+const DEFAULT_SECTIONS = ['Aula'];
 const sectionXp = { 'Fácil': 100, 'Médio': 150, 'Difícil': 200, Insano: 300 };
 const difficultyClass = { 'Fácil': 'easy', 'Médio': 'medium', 'Difícil': 'hard', Insano: 'insane' };
 const challengeSections = ['Fácil', 'Médio', 'Difícil', 'Insano'];
@@ -25,8 +28,36 @@ export default function NormalizationGame() {
   const [completed, setCompleted] = useState(() => new Set());
   const [solutionSeen, setSolutionSeen] = useState(() => new Set());
   const [drafts, setDrafts] = useState({});
-  const [openSections, setOpenSections] = useState(() => new Set(['Aula']));
+  const [openSections, setOpenSections] = useState(() => new Set(DEFAULT_SECTIONS));
   const firstRender = useRef(true);
+  const skipScroll = useRef(false); // restoring the saved screen must not scroll the page
+
+  // Progress and typed answers survive reloads.
+  const ready = useSavedGame(
+    SAVE_KEY,
+    { view, drafts, xp, completed: [...completed], solutionSeen: [...solutionSeen], openSections: [...openSections] },
+    (saved) => {
+      const { view: savedView } = saved;
+      const validView = savedView && ((savedView.kind === 'lesson' && indexIn(savedView.index, nfLessons.length)) || (savedView.kind === 'level' && indexIn(savedView.index, nfLevels.length)) || (savedView.kind === 'lab' && savedView.index === 0));
+      if (validView) { skipScroll.current = true; setView({ kind: savedView.kind, index: savedView.index }); }
+      setDrafts(stringMap(saved.drafts));
+      if (Number.isFinite(saved.xp) && saved.xp >= 0) setXp(saved.xp);
+      setCompleted(indexSet(saved.completed, nfLevels.length));
+      setSolutionSeen(indexSet(saved.solutionSeen, nfLevels.length));
+      if (Array.isArray(saved.openSections)) setOpenSections(new Set(saved.openSections.filter((title) => typeof title === 'string')));
+    },
+  );
+
+  const resetProgress = () => {
+    if (!window.confirm('Apagar todo o progresso da Normalização (XP, desafios concluídos e respostas digitadas)?')) return;
+    clearSavedGame(SAVE_KEY);
+    setView({ kind: 'lesson', index: 0 });
+    setDrafts({});
+    setXp(0);
+    setCompleted(new Set());
+    setSolutionSeen(new Set());
+    setOpenSections(new Set(DEFAULT_SECTIONS));
+  };
 
   const go = (next) => {
     setView(next);
@@ -35,6 +66,7 @@ export default function NormalizationGame() {
   };
   useEffect(() => {
     if (firstRender.current) { firstRender.current = false; return; }
+    if (skipScroll.current) { skipScroll.current = false; return; }
     document.getElementById('level-title')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
   }, [view]);
   const toggleSection = (title) => setOpenSections((current) => {
@@ -121,8 +153,8 @@ export default function NormalizationGame() {
   return (
     <main className="app-shell">
       <Topbar back mark="NF" title="Normalização" progress={`${completed.size} / ${nfLevels.length} desafios`} />
-      <section className="game-layout" aria-live="polite">
-        <LevelRail heading="Trilha da normalização" footer="Cada fato em um só lugar." sections={railSections} openSections={openSections} onToggleSection={toggleSection} onSelect={(item) => go({ kind: item.kind, index: item.index })} />
+      <section className="game-layout" aria-live="polite" style={ready ? undefined : { visibility: 'hidden' }}>
+        <LevelRail heading="Trilha da normalização" footer="Cada fato em um só lugar." onReset={resetProgress} sections={railSections} openSections={openSections} onToggleSection={toggleSection} onSelect={(item) => go({ kind: item.kind, index: item.index })} />
         <section className="play-area">
           <GameHeader {...header} xp={xp} />
           <MissionBanner {...mission} />

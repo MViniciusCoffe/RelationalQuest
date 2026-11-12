@@ -156,6 +156,9 @@ body.sheet-lock { overflow: hidden; }
 .level-rail li.done:not(.active) .level-number { color: var(--accent); border-color: var(--accent-ring); background: var(--accent-soft); }
 .rail-footer { display: flex; align-items: center; gap: 8px; margin-top: auto; color: var(--muted); font-size: 11px; }
 .pulse-icon { color: var(--warm-deco); font-size: 18px; }
+.rail-footer { flex-wrap: wrap; }
+.rail-reset { flex-basis: 100%; margin-top: 8px; padding: 6px 0; color: var(--faint); background: none; border: 0; border-top: 1px dashed var(--line); cursor: pointer; font: 10px var(--font-mono); letter-spacing: .06em; text-align: left; text-transform: uppercase; }
+.rail-reset:hover { color: var(--error-fg); }
 
 /* Header of play area */
 .play-area { max-width: 1030px; }

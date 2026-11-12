@@ -5,7 +5,7 @@ import { useEffect, useState } from 'react';
 // Trail of levels. Desktop: a column on the left. Phone: a compact bar (current item,
 // previous/next) that opens the full trail as a full-screen sheet.
 // `sections` = [{ title, meta, difficulty, items: [{ id, label, badge, done, active, square }] }]
-export default function LevelRail({ heading, footer, sections, openSections, onToggleSection, onSelect }) {
+export default function LevelRail({ heading, footer, sections, openSections, onToggleSection, onSelect, onReset }) {
   const [sheetOpen, setSheetOpen] = useState(false);
 
   const flat = sections.flatMap((section) => section.items.map((item) => ({ ...item, section: section.title })));
@@ -60,7 +60,10 @@ export default function LevelRail({ heading, footer, sections, openSections, onT
             ];
           })}
         </ol>
-        <div className="rail-footer"><span className="pulse-icon">✦</span><span>{footer}</span></div>
+        <div className="rail-footer">
+          <span className="pulse-icon">✦</span><span>{footer}</span>
+          {onReset && <button className="rail-reset" type="button" onClick={() => { setSheetOpen(false); onReset(); }}>Apagar progresso</button>}
+        </div>
       </div>
     </aside>
   );
