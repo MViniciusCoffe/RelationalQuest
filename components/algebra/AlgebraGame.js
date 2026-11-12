@@ -44,6 +44,36 @@ export default function AlgebraGame() {
   const [openSections, setOpenSections] = useState(() => new Set(['Tutorial']));
   const [hintShown, setHintShown] = useState(false);
   const firstRender = useRef(true);
+  const dockSentinel = useRef(null);
+  const executionRef = useRef(null);
+  const [docked, setDocked] = useState(false);
+  const [runCount, setRunCount] = useState(0);
+
+  // The editor docks to the bottom of the screen while its normal place is below the fold,
+  // so the tables can be scrolled while typing. The sentinel sits just above the editor and
+  // does not move when the editor changes size, so docking never flickers.
+  useEffect(() => {
+    if (typeof IntersectionObserver === 'undefined' || !dockSentinel.current) return undefined;
+    const observer = new IntersectionObserver(([entry]) => setDocked(!entry.isIntersecting && entry.boundingClientRect.top > 0), { rootMargin: '0px 0px -160px 0px' });
+    observer.observe(dockSentinel.current);
+    return () => observer.disconnect();
+  }, []);
+
+  // After running a query, bring the result into view. Scrolling un-docks the editor, which
+  // grows back and pushes the result down, so the scroll is corrected once it ends.
+  useEffect(() => {
+    const el = executionRef.current;
+    if (!runCount || !el) return undefined;
+    const goThere = () => el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    const correct = () => {
+      const atEnd = window.scrollY + window.innerHeight >= document.documentElement.scrollHeight - 2;
+      if (!atEnd && Math.abs(el.getBoundingClientRect().top - 12) > 6) goThere();
+    };
+    goThere();
+    window.addEventListener('scrollend', correct, { once: true });
+    const fallback = setTimeout(correct, 800); // browsers without the scrollend event
+    return () => { window.removeEventListener('scrollend', correct); clearTimeout(fallback); };
+  }, [runCount]);
 
   const playground = view.kind === 'db';
   const level = playground ? null : levels[view.index];
@@ -79,6 +109,7 @@ export default function AlgebraGame() {
     const tries = attempts + 1;
     setAttempts(tries);
     const outcome = RelationalEngine.run(text, tables);
+    setRunCount((count) => count + 1);
 
     if (playground) {
       setRun({ outcome, status: outcome.error ? 'erro' : 'executada', feedback: outcome.error ? { kind: 'playground-error', message: outcome.error } : { kind: 'playground-ok' } });
@@ -254,7 +285,7 @@ export default function AlgebraGame() {
 
         <section className={`play-area${tables.length > 2 ? ' wide' : ''}`}>
           <GameHeader {...header} xp={playground ? undefined : xp} />
-          <MissionBanner {...mission} />
+          <MissionBanner {...mission} pinned={false} />
 
           <div className="workspace-grid">
             <section className="data-panel panel">
@@ -268,8 +299,10 @@ export default function AlgebraGame() {
             </section>
           </div>
 
-          <section className="query-panel panel">
+          <div className="dock-sentinel" ref={dockSentinel} aria-hidden="true" />
+          <section className={`query-panel panel query-dock${docked ? ' docked' : ''}`} aria-label="Monte sua consulta">
             <div className="query-heading"><div><span className="panel-index">03</span><h2>Monte sua consulta</h2></div><span className="live-pill"><span /> execução ao vivo</span></div>
+            <p className="dock-objective" title={mission.objective}><span aria-hidden="true">🎯</span>{mission.objective}</p>
             <QueryEditor key={viewKey(view)} value={query} onChange={setQuery} onSubmit={submit} tables={tables} placeholder={placeholder} attemptsLabel={attemptsLabel} />
             <LatexPreview query={query} />
           </section>
@@ -277,9 +310,11 @@ export default function AlgebraGame() {
           <Rules />
 
           {run && (
+            <div ref={executionRef} className="execution-anchor">
             <ExecutionPanel outcome={run.outcome} status={run.status}>
               {renderFeedback(run.feedback, run.outcome)}
             </ExecutionPanel>
+            </div>
           )}
         </section>
       </section>

@@ -31,7 +31,7 @@ export default function QueryEditor({ value, onChange, onSubmit, tables, placeho
     const result = QueryAutocomplete.suggestions(el.value, caret, tables, forced);
     if (!result || !result.items.length) return close();
     const coords = QueryAutocomplete.caretCoordinates(el, result.start);
-    return setAc({ ...result, active: 0, top: el.offsetTop + coords.top + coords.height + 4, left: el.offsetLeft + coords.left });
+    return setAc({ ...result, active: 0, top: el.offsetTop + coords.top + coords.height + 4, lineHeight: coords.height, left: el.offsetLeft + coords.left });
   };
 
   // Replace text, then put the caret where it belongs once React has updated the textarea.
@@ -55,6 +55,10 @@ export default function QueryEditor({ value, onChange, onSubmit, tables, placeho
     if (!ac || !list.current || !wrap.current) return;
     const maxLeft = Math.max(0, wrap.current.clientWidth - list.current.offsetWidth - 4);
     list.current.style.left = `${Math.min(ac.left, maxLeft)}px`;
+    // Open upward when the list would leave the screen (e.g. editor docked at the bottom).
+    const below = wrap.current.getBoundingClientRect().top + ac.top + list.current.offsetHeight > window.innerHeight - 8;
+    const above = ac.top - ac.lineHeight - 8 - list.current.offsetHeight;
+    list.current.style.top = `${below && wrap.current.getBoundingClientRect().top + above > 0 ? above : ac.top}px`;
     list.current.querySelector('[aria-selected="true"]')?.scrollIntoView({ block: 'nearest' });
   }, [ac]);
 
@@ -126,7 +130,7 @@ export default function QueryEditor({ value, onChange, onSubmit, tables, placeho
           />
           <button type="submit">Executar <span>↗</span></button>
           {ac && (
-            <ul className="ac-list" id="ac-list" role="listbox" ref={list} style={{ top: ac.top, left: ac.left }}>
+            <ul className="ac-list" id="ac-list" role="listbox" ref={list} style={{ left: ac.left }}>
               {ac.items.map((item, index) => (
                 <li key={`${item.label}-${index}`} className="ac-item" id={`ac-item-${index}`} role="option" aria-selected={index === ac.active}
                   onMouseDown={(event) => { event.preventDefault(); accept(index); }}>
